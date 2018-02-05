@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Islands Chat</title>
+    <style>
+      table, th, td { border:1px solid black; }
+    </style>
+  </head>
+  <body>
+    
+    <h1>Overview</h1>
+    
+    <p>Chat provides secure and anonymous communications between a group of invited participants.</p>
+    
+    <p>The following characteristics are are present:</p>
+    
+    <ol>
+      <li>No motherships</li>
+      <li>No shared clocks</li>
+      <li>No central key authority</li>
+      <li>No user identification</li>
+      <li>No user registration</li>
+    </ol>
+    
+    <p>Summarized: Islands Chat enables people who hold private keys to interact with other people who hold
+      private keys when exposing only their public keys.</p>
+    
+    <p>The chat will be ordered <em>only to the extent</em> that messages sent from a sender will arrive ordered
+      by that sender (including requesting of any lost messages and re-ordering of messages out of order).</p>
+    
+    <p>In particular, there <em>is no absolute ordering</em> of the chat. This means that the race condition
+      where Particpant 1 and Participant 2 both send at the same time is <em>not resolved</em>. Each participant
+      will see a different ordering of messages and will store a different ordering of messages. But the promise
+      that each participant's messages will be ordered is <em>not broken</em>. All complaints that "He saw the
+      other person's comments arrive before mine and I sent mine first!" will be considered a mental defect
+      by the complainer.
+    </p>
+    
+    <h1>Method</h1>
+    <h2>Terminology</h2>
+    <table>
+      <thead>
+	<tr>
+	  <th>Term</th>
+	  <th>Definition</th>
+	</tr>
+      </thead>
+      <tbody>
+	<tr>
+	  <td>Participant</td>
+	  <td>
+	    <p>Participants are the entities (normally people but <em>may be a program</em> that have an asymmetric
+	      key pair and are enrolled in the chat topic.</p>
+	  </td>
+	</tr>
+	<tr>
+	  <td>Asymmetric key pair</td>
+	  <td>
+	    <p>An asymmetric key pair is a pair of keys, one public and one secret (note, the secret key is normally
+	    called the private key but the term secret was chosen so that we can easily refer to a key within a
+	      pair as kp(p) for public and kp(s) for secret).</p>
+	    <p>The key pair allows us to cryptographically make certain claims, in particular:</p>
+	    <ul>
+	      <li>only the holder of the secret key can decrypt what was encrypted to the public key</li>
+	      <li>only the holder of the private key can encrypt what can be decoded via the public key</li>
+	    </ul>
+	    <p>These claims enable using a secret key to sign a hash.</p>
+	    <p>There is <em>never any reason</em> to hide or restrict access to a public key. The entire point
+	      of asymmetric keys is that the <em>only secret</em> is the secret key.</p>
+	    <p>At no time will or should anything request a secret key as part of any exchange in the system.</p>
+	    <p>These keys are slow to encrypt and decrypt with and take a lot of computing time to create. They are
+	      used almost exclusively for signing (encrypting a hash) or protecting symmetric keys.</p>
+	  </td>
+	</tr>
+	<tr>
+	  <td>Hash algorithm</td>
+	  <td>
+	    <p>Hashing provides a one-way transformation such that given a block B1 of bytes which is hashed to a
+	    hash value H1 there are very few blocks that hash to the same value and it is "very expensive" to find
+	    such a block.</p>
+	  </td>
+	</tr>
+	<tr>
+	  <td>Symmetric key</td>
+	  <td>
+	    <p>A symmetric key is <em>shared</em> by all parties that need to encrypt or decrypt. Often called the
+	      shared key, it's typically encrypted itself by either a private or public key so it can be passed
+	      between agents.</p>
+	    <p>Symmetric keys are much faster to encrypt/decrypt with and can handle arbitrary sized amounts of data.
+	      This contrasts with asymmetric keys wich are slow to create, slow to use, and can only encrypt small
+	      blocks of data.</p>
+	    <p>These keys are used to encrypt message contents.</p>
+	  </td>
+	</tr>
+	<tr>
+	  <td>Agent</td>
+	  <td>
+	    <p>Agents are software implementations that "stand in" for participants.</p>
+	    <p>The exchanges of messages, keys, and signatures is documented as if they were between participants
+	      but realistically people are <em>not good</em> at tracking and manually apply keys and algorithms.</p>
+	    <p>So agents will handle the keys and protocols on the behalf of participants.</p>
+	    <p>This is very crucial because managing the plethora of keys involved in even a small number of chat
+	      memberships would be overwhelming. The keys used are not stored in a Password Safe. They are not
+	      passwords at all, but rather long sequences of bytes. They aren't seen or exposed to people during
+	      operation. But they are stored, used, and created by agents.</p>
+	    <p>For all of that, at some point the participant must know <em>something secret</em> that they can enter
+	      (such as a pass-phrase, a password, a biometric token, or something) to allow them to authenticate
+	      themselves <em>to their key management agent</em>.</p>
+	    <p>Since Islands has no identification system, users are never expected and should never provide any form
+	      of secret to Islands, only to their key management agent. That agent runs on a system they control and
+	      is known to them only.</p>
+	  </td>
+	</tr>
+	<tr>
+	  <td>Island</td>
+	  <td>
+	    <p>An Island is a process controlled by the participant and run <em>on any machine the participant
+		chooses</em> which acts as the access into the Islands applications.</p>
+	    <p>It is absolutely appropriate for a user to <em>never share</em> their island with any other
+	      participants.</p>
+	    <p>All communication between participants is the result of messages exchanged between Islands using
+	      channels that are fully anonymous. TOR is the initial medium used to achieve this.</p>
+	    <p>If an island is shared the participants who do not control the Island have <em>no anonymity promise</em>
+	      from the owner of the Island. This is because the Island's owner can <em>always</em> see the IP addresses
+	      of all connections on their Island using netstat.</p>
+	    <p>It is perfectly fine to share an Island via an onion address if the participant configures that. That
+	      would allow TOR to provide the anonymity and offset that limitation, but it would also require that only
+	      TOR users access the Island.</p>
+	    <p>It's intended that some people will expose public Islands to allow non-members to participate as part
+	      of the process of increasing usage. The hope is that the non-members will choose to run their own Island
+	      and fully participate later.</p>
+	  </td>
+	</tr>
+      </tbody>
+    </table>
+    <h2>Constraints</h2>
+    <p>These are restrictions define mandates. None of these may be violated.</p>
+    <ol>
+      <li>No Island may hold secrets (neither secret asymmetric keys nor secret shared symmetric keys).</li>
+      <li>All cryptographic work done on an Island's behalf is done by an agent under control of the Island's
+	user.</li>
+      <li>All files held on an Island will be cryptographically secure sufficient that backups and breaches do not
+	compromise the secret keys of any participant (owners or others).</li>
+      <li>Communication between a participant and their Island must be secured (typically https and wss).</li>
+      <li>Everything sent between Islands will be encrypted such that no trust for channel encryption is needed. Technically,
+	TOR also makes cryptographic promises but there's no gaurantee that TOR will be the only channel. This means all
+	messages sent are encrypted to Islands expectations by Islands and Agents of Islands, not the intermediates.</li>
+    </ol>
+    <h2>Particpant Perspective</h2>
+    <p>A participant goes through a process of enrolling in a topic. Once enrolled, they can send chat messages
+      and will see chat message sent by others.</p>
+    <p>The participant may connect from any number of devices (even simultaneously) and be able to review all
+      chat messages sent and received in order from any of their devices.</p>
+    <p>The following is three particpants with one sending a message that is delivered to the others. This is a
+      view post-enrollment.</p>
+    <img src="img/sending_message_1.png" alt="m1 being sent to topic and reflected to others"
+	 width="776"
+	 ></img>
+    <p>When chatting, the participants are blissfully unaware of the layers. They are entering messages into a web-page
+      served by some Island (normally their own) and seeing messages in the same page.</p>
+    <h2>Island Perspective</h2>
+    <p>The Island is much more aware of the underlying infrastructure.</p>
+    <img src="img/island_view_1.png" alt="Island sowing node, tor, and the connection from participant to node to tor to tor network"
+	 width="800"
+	 ></img>
+    <p>The only IP addresses known are:</p>
+    
+    <ul>
+      <li>Web client knows the Island's IP address</li>
+      <li>Island knows web client's IP address</li>
+    </ul>
+    
+    <p>The counterparties (the other participants in the diagram above) are reached only via TOR so their IP addresses
+      are both unknown and untracked.</p>
+
+    <h2>Connection Perspective</h2>
+    <p>The image below shows the actual initial implementation connecting through TOR.</p>
+    <img src="img/tor_connecting_many_1.png" alt="Connected participants through TOR"
+	 width="625"></img>
+  </body>
+</html>
