@@ -177,5 +177,210 @@
     <p>The image below shows the actual initial implementation connecting through TOR.</p>
     <img src="img/tor_connecting_many_1.png" alt="Connected participants through TOR"
 	 width="625"></img>
+
+    <h2>Agents Involved in Chat</h2>
+    <h3>TOR Connection Agent</h3>
+    <p>This agent has the following abilities:</p>
+    <ol>
+      <li>Accept a public key from a command client and open a  TOR onion address for it</li>
+      <li>Accept messages from TOR and append them to a queue</li>
+      <li>Accept the "last queue poition read" from command client and push from queue to command client</li>
+      <li>Accept a message, from public key, to public key from the command client to push out via TOR</li>
+      <li>Maintain a list of (public key local, public key remote, socket local) triples</li>
+    </ol>
+
+    <p>Fundamentally, the TOR Connection Agent "connects" any message generating/processing agent to the TOR network
+      so that agents can be written (and tested) without TOR connectivity.</p>
+
+    <p>At a later point in time, there will be other connection agents for different underlying communication
+      channels, such as <a href="https://geti2p.net/en/">I2P nework</a>, <a href="https://www.ethereum.org/">Ethereim</a>,
+      or even a DHT or some "as yet undefined" mechanism.</p>
+
+    <h4>Connection Server Authenticating a TOR Origin Connection Client</h4>
+
+    <p>NOTE: the Connection Agent acts as both client and server ... In its server role it opens onion addresses
+      and listens for Connection Agent clients to connect. In its client role, it accepts a public key and opens
+      a connection to another Connection Agent in the serve role.</p>
+
+    <img src="img/tor_connection_agent_class.png" alt="class diagram" width="800"></img>
+
+    <p>The TOR onion address acts like a socket, only instead of a host/port it's just a public key (not necessarily
+      our public key, though). When a counterparty connects a normal BSD style socket results. Like all BSD sockets
+      this is separate from the listener socket that accepted the connection.</p>
+
+    <p>Because of TOR, we don't (can't, and <em>ought not</em>) know the counter-party's IP address and port. Instead,
+      we need to verify that the counter-party has a public key and the private key to go with it. The protocol below
+      (from the perspective of the accepting connection agent, NOT the initiating one) assures us of that fact.</p>
+
+    <p>The following sequence shows how the server can "come to trust" that the client holds the private key
+      for the public key that it provides as its counter-party ID:</p>
+    
+    <table>
+      <thead>
+	<tr>
+	  <th>Connection Server Role</th>
+	  <th>Counterparty Client Role</th>
+	</tr>
+      </thead>
+      <tbody>
+	<tr>
+	  <th>
+	  </th>
+	  <th>
+	    <ol>
+	      <li>Provide claimed client public key to server</li>
+	</tr>
+	<tr>
+	  <th>
+	    <ol>
+	      <li>addPublicKey "other claimed key" as OPK</li>
+	      <li>addPublicKey "my key for onion address" as PK</li>
+	      <li>Create nonce as N1</li>
+	      <li>Create symmetric key as S1</li>
+	      <li>Merge Pk, N1, OPK  as PayValidate</li>
+	      <li>hash PayValidate as PayValidateHash</li>
+	      <li>Encrypt N1 with S1 as EncryptedNonce</li>
+	      <li>Encrypt S1 with OPK as ToClientSymKey</li>
+	      <li>Merge ToClientSymKey, EncryptedNonce as ToClientPayload</li>
+	      <li>Send ToClientPayload to Counterparty</li>
+	    </ol>
+	  </th>
+	  <th>
+	  </th>
+	</tr>
+	<tr>
+	  <th>
+	  </th>
+	  <th>
+	    <ol>
+	      <li>addPublicKey "key to the connecter server role I am connecting to" ServerPublicKey</li>
+	      <li>addCiphertext message as FullMessage</li>
+	      <li>Cut "an encrypted sym key" from FullMessage giving SymKeyEnc and rest in EncryptedNonce</li>
+	      <li>addPrivateKey "my private key" as SecretKey</li>
+	      <li>addPublicKey "my public key" as PublicKey</li>
+	      <li>decryptAsymmetric SymKeyEnc with SecretKey giving SymKey</li>
+	      <li>decrypt EncryptedNonce with SymKey giving Nonce</li>
+	      <li>Merge ServerPublicKey, Nonce, PublicKey as PayValidate</li>
+	      <li>sign PayValidate with SecretKey giving Signature</li>
+	      <li>Send Signature to Server (the counterparty)</li>
+	      <li>Indicate that we have validated we can send to the server (in our view at least)</li>
+	      <li>Indicate that we DO NOT ACCEPT from the server until it validates itself to US</li>
+	    </ol>
+	  </th>
+	</tr>
+	<tr>
+	  <th>
+	    <ol>
+	      <li>addSignature "signature from client" as ClientSignatureToValidate</li>
+	      <li>validateSignature ClientSignatureToValidate with OPK</li>
+	      <li>Indicate that the client is valid to deliver messages</li>
+	      <li>Indicate that we have not yet validated to send messages to the client</li>
+	    </ol>
+	  </th>
+	  <th>
+	  </th>
+	</tr>
+      </tbody>
+    </table>
+
+    <p>After the above sequence, the server trusts the client is who it claims. However, the client has no
+      reason to trust the server. And since the server <em>does not have a secret key</em> to go with its public
+      key the server <em>can not</em> authenticate itself to the client. So the client is free to send to this
+      server, and this server will accept messages from the client. But the client <em>will not accept</em>
+      messages <em>from this server</em> until the server authenticates itself with the client.</p>
+
+    <p>Since the server knows this, the server is in a state where it is allowed to receive but is unable to
+      send. The following rough state machine diagram shows the two concurrent machines that make up the server.
+      The left machine is the server's trust of the client. The right is the server's lack of being trusted by
+      the client until it authenticates (and eventually becomes able to send).</p>
+
+    <img src="img/connection_server_state_machine_1.png" alt="state machine diagram" width="800"></img>
+
+    <p>When a key agent (of any sort) eventually connects to the connection server's command client (and authenticates
+      itself) the connection server will go through an almost identical process back to the client connection (EACH
+      client connection!) to finally authenticate itself to the client, so that it can send messages to the client.</p>
+
+    <p>TODO: document the exchange to allow the server to authenticate to the client with the help of the
+      key agent</p>
+
+    <h4>Server Role Queueing Received Messages</h4>
+
+    <p>Even though the server can't read the messages (it can't decrypt them) it knows the message boundaries
+      because of WebSockets and can enqueue the messages.</p>
+
+    <p>The queue contains triples of the form:</p>
+    <ul>
+      <li>Public key of the sender (the "other" or "client" from the server's perspective)</li>
+      <li>Public key of the receiver (one of the public keys for which the server has a listening onion address)</li>
+      <li>Encrypted block of data that can't be read</li>
+    </ul>
+
+    <p>The queue is a simple file on the disk of the connection agent.</p>
+
+    <p>Each time a triple is ready, the length of the triple is encoded and then the length is appended to the file,
+      the triple is appended, and the length is appended AGAIN.</p>
+
+    <p>The length is present before the triple so that the delivery knows how much to read to grab "the entire encoded
+      triple." The lengh is present AFTER the triple so that the system can read BACKWARDS and use the file as a
+      double-ended queue (a dequeue).</p>
+
+    <p>When the command client asks for messages to be delivered it specifies "from where" as a byte offset into this
+      file. It's the responsiblity of the command client to store this "in some useful persistent place." If the command
+      file does NOT have any idea where the file should be read from it sends zero. This will cause the whole dequeue to
+      be replayed. Expenses, but since the protocol demands "at least once" semantics being handed messages it has seen
+      before <em>must not ever</em> provide any logical inconsistencies (it will be slow, but harmless).</p>
+
+    <p>The server always appends data read to the file. The thread/process that feeds messages to the command client
+      is always reading from the file. In this way, any number of command clients can connect and be re-fed the same
+      messages. This is not normally "a sensible thing" unless a distributed recoveyr with many crashes is ongoing.</p>
+
+    <p>With the back-links (the length added after the block) it's possible to go back "a number of messages" and then
+      prune the file as needed by building a new file (atomically copying the last N to a new file and then appending
+      to that instead).</p>
+
+    <h4>Client Role</h4>
+
+    <p>In the client role the command client delivers a triple (sending public key, receiving public key, encrypted message)
+      to the Connection Agent. The agent opens (if needed) a client connection or re-uses an existing server connection
+      if that client happens to be connected.</p>
+
+    <p>Given that most agent communication is fully bi-directional, in almost all cases a single connection between agents
+      will be present, whether opened by a client request or opened as a server accept. These connections must be authenticated
+      to each other (see the above protocol) and thus in the end there's a single list of (public key self, public key other, WS)
+      which is used on both receipt of messages (to append to the queue) and for output delivery.</p>
+
+    <p>However, because there <em>may not yet</em> be a connection, there's another dequeue used for outbound sending to hold
+      messages until thee's a socket to send them. This deque file is transient and is erased each time the Connection Agent
+      restarts. When a new connection is authenticated, this file is walked from the beginning and any messages where there's
+      now a (public key self, public key other, WS) link the message is sent and any message where there is not is re-enqueued
+      to a new file. In this way, the files are "churned" and messages are always delivered in the order received.</p>
+
+    <p>TODO: document the sequence and updated cliass diagram showing both links to contrast with the simpler initial class
+      diagram above.</p>
+    
+    
+    <h1>To Do</h1>
+    <h2>Sequence for assembly</h2>
+    <ol>
+      <li>First Round</li>
+      <ol>
+	<li>Create Topic</li>
+	<li>Send Invite</li>
+	<li>Accept Invite</li>
+	<li>Send Message</li>
+      </ol>
+      <li>Second Round</li>
+      <ol>
+	<li>Replay Request</li>
+	<li>Crash Recovery</li>
+      </ol>
+      <li>Third Round</li>
+      <ol>
+	<li>Banish Participant</li>
+	<li>Permanently Leave Topic (self banish)</li>
+	<li>Grant permission to Invite</li>
+	<li>Grant permission to Banish</li>
+      </ol>
+    </ol>
   </body>
 </html>
