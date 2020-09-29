@@ -7,7 +7,6 @@
 *cache./
 *TAGS
 *venv/
-*env/
 Conversations/*
 *history/*
 gc.bat
